@@ -10,6 +10,22 @@ const ALLOWED_TYPES = new Set([
   "external",
 ]);
 
+export type UserDirectRule = {
+  // One of the common Surge rule prefixes. Enum keeps the DB payload tiny
+  // and lets the UI pre-validate before it hits the backend.
+  type: "DOMAIN" | "DOMAIN-SUFFIX" | "DOMAIN-KEYWORD" | "IP-CIDR" | "IP-CIDR6";
+  value: string;
+};
+
+export const USER_DIRECT_BEGIN = "# --- user-direct-begin (managed by surge-controller) ---";
+export const USER_DIRECT_END   = "# --- user-direct-end ---";
+
+export function userRuleLine(r: UserDirectRule): string {
+  // IP-CIDR needs no-resolve so it doesn't DNS-thrash; DOMAIN-* do not.
+  const opt = r.type === "IP-CIDR" || r.type === "IP-CIDR6" ? ",no-resolve" : "";
+  return `${r.type},${r.value},DIRECT${opt}`;
+}
+
 export type SanitizeReport = {
   removedProxies: string[];
   affectedGroups: string[];
@@ -18,6 +34,7 @@ export type SanitizeReport = {
   tier3: string[];
   injectedHttpApi: boolean;
   tierGroupsAdded: string[];
+  userDirectRules: number;
 };
 
 type Section = {
@@ -97,6 +114,21 @@ function rebuildGroupLine(g: {
 
 export interface SanitizeOptions {
   httpApiValue: string; // e.g. "surgepasswd@0.0.0.0:6171"
+  userDirectRules?: UserDirectRule[];
+}
+
+/** Strip any previously-injected user-direct block from a [Rule] section. */
+function stripUserDirectBlock(lines: string[]): string[] {
+  const out: string[] = [];
+  let skipping = false;
+  for (const l of lines) {
+    const t = l.trim();
+    if (t === USER_DIRECT_BEGIN) { skipping = true; continue; }
+    if (t === USER_DIRECT_END)   { skipping = false; continue; }
+    if (skipping) continue;
+    out.push(l);
+  }
+  return out;
 }
 
 export function sanitize(input: string, opts: SanitizeOptions): {
@@ -112,6 +144,7 @@ export function sanitize(input: string, opts: SanitizeOptions): {
     tier3: [],
     injectedHttpApi: false,
     tierGroupsAdded: [],
+    userDirectRules: 0,
   };
 
   // 1) Filter [Proxy]
@@ -202,6 +235,26 @@ export function sanitize(input: string, opts: SanitizeOptions): {
   });
   if (!replaced) general.lines.push(target);
   report.injectedHttpApi = true;
+
+  // 5) Inject user-managed DIRECT rules at the top of [Rule] so they win
+  //    against anything the subscription defines. We wrap them in sentinels
+  //    so we can strip & re-inject cleanly on every sanitize() pass.
+  const userRules = opts.userDirectRules ?? [];
+  if (!sections.find(s => s.name === "Rule")) {
+    sections.push({ name: "Rule", lines: [] });
+  }
+  const ruleSec = sections.find(s => s.name === "Rule")!;
+  ruleSec.lines = stripUserDirectBlock(ruleSec.lines);
+  if (userRules.length > 0) {
+    const block = [
+      USER_DIRECT_BEGIN,
+      ...userRules.map(userRuleLine),
+      USER_DIRECT_END,
+      "",
+    ];
+    ruleSec.lines = [...block, ...ruleSec.lines];
+    report.userDirectRules = userRules.length;
+  }
 
   return { output: serialize(sections), report };
 }

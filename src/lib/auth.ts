@@ -47,13 +47,49 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 });
 
 export type AuthCtx = {
-  via: "session" | "token";
+  via: "session" | "token" | "lan";
   userId?: number;
   login?: string;
 };
 
+/** True if the given Host header value matches LAN_TRUSTED_HOSTS. */
+export function isLanHost(host: string | null | undefined): boolean {
+  if (!host || !env.lanTrustedHosts.length) return false;
+  return env.lanTrustedHosts.includes(host.toLowerCase());
+}
+
+/**
+ * Server-component helper. Checks the incoming request's Host header against
+ * LAN_TRUSTED_HOSTS. Used by pages to skip the /login redirect on LAN.
+ */
+export async function isLanRequest(): Promise<boolean> {
+  // Lazy import to avoid pulling next/headers into the client bundle.
+  const { headers } = await import("next/headers");
+  const h = await headers();
+  return isLanHost(h.get("host"));
+}
+
+/**
+ * Page-level gate. Use in server components:
+ *   await requireAccess();   // throws redirect("/login") if unauthorized
+ */
+export async function requireAccess(): Promise<{ lan: boolean; login: string | null }> {
+  if (await isLanRequest()) return { lan: true, login: null };
+  const session = await auth();
+  const login = (session as { user?: { login?: string } } | null)?.user?.login ?? null;
+  if (login) return { lan: false, login };
+  const { redirect } = await import("next/navigation");
+  redirect("/login");
+  // unreachable — redirect() throws — but TS can't see across dynamic import.
+  throw new Error("unreachable");
+}
+
 /** Resolves a request to an auth context. Returns null if unauthenticated. */
 export async function authorize(req: Request): Promise<AuthCtx | null> {
+  // 0) LAN trusted host — bypass all auth (typical home network).
+  if (isLanHost(req.headers.get("host"))) {
+    return { via: "lan", login: "lan" };
+  }
   // 1) Bearer token
   const h = req.headers.get("authorization") ?? "";
   const m = h.match(/^Bearer\s+(.+)$/i);

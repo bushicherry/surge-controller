@@ -1,11 +1,12 @@
 import { ok, bad, withAuth } from "@/lib/util";
-import { getSetting } from "@/lib/db";
+import { getSetting, setSetting } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
 import { sanitize } from "@/lib/sanitizer";
 import { writeProfileAtomic } from "@/lib/profile";
 import { surge } from "@/lib/surge";
 import { audit } from "@/lib/audit";
 import { env } from "@/lib/env";
+import { SUB_RAW_KEY, getUserDirectRules } from "@/lib/apply";
 
 export async function POST(req: Request) {
   return withAuth(req, async (ctx) => {
@@ -27,8 +28,14 @@ export async function POST(req: Request) {
     if (!res.ok) return bad(`fetch subscription failed: ${res.status}`);
     const raw = await res.text();
 
-    // Sanitize
-    const { output, report } = sanitize(raw, { httpApiValue });
+    // Cache raw so /api/user-rules can re-sanitize without re-fetching.
+    setSetting(SUB_RAW_KEY, raw);
+
+    // Sanitize (with any existing user-direct rules re-applied on top).
+    const { output, report } = sanitize(raw, {
+      httpApiValue,
+      userDirectRules: getUserDirectRules(),
+    });
 
     // Write
     await writeProfileAtomic(profilePath, output);

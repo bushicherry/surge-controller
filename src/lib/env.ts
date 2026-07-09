@@ -17,4 +17,13 @@ export const env = {
   surgeProfilePath: process.env.SURGE_PROFILE_PATH ?? "",
   surgeUA: process.env.SURGE_UA ?? "Surge/2650",
   dbPath: process.env.DB_PATH ?? "./data/app.db",
+  /**
+   * Hosts (Host header values) that are trusted as LAN, e.g.
+   *   "192.168.1.50:3000,my-mac.local:3000,localhost:3000"
+   * Requests whose Host header matches one of these entries skip auth entirely.
+   * Exact match (case-insensitive); include the port if you serve on non-80/443.
+   * Leave empty to disable LAN bypass.
+   */
+  lanTrustedHosts: (process.env.LAN_TRUSTED_HOSTS ?? "")
+    .split(",").map(s => s.trim().toLowerCase()).filter(Boolean),
 };

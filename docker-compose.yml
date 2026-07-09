@@ -1,0 +1,51 @@
+services:
+  surge-controller:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: surge-controller:latest
+    container_name: surge-controller
+    restart: unless-stopped
+
+    # Publish on all interfaces so LAN devices can hit http://<mac-lan-ip>:3000
+    # directly without going through Cloudflare.
+    ports:
+      - "3000:3000"
+
+    # Pass through all config; see .env.example for definitions.
+    env_file:
+      - .env.local
+
+    environment:
+      # Inside the container, the Mac host is reachable as host.docker.internal.
+      # Surge's HTTP API binds to 0.0.0.0:6171 on the Mac (set via http-api line
+      # in the Surge profile). The container talks to it through this URL.
+      SURGE_API_HOST: "http://host.docker.internal:6171"
+      # SQLite lives on the mounted /data volume.
+      DB_PATH: "/data/app.db"
+      # Inside the container the Surge profile is mounted at this fixed path.
+      # Override only if you change the mount target below.
+      SURGE_PROFILE_PATH: "/surge/profile.conf"
+
+    volumes:
+      # Persistent app data (SQLite + WAL).
+      - ./data:/data
+
+      # The active Surge profile file. The container writes updated subscription
+      # output here, then asks Surge (via HTTP API) to reload.
+      # On macOS the path is typically:
+      #   ~/Library/Application Support/Surge/Profiles/Default.conf
+      # Set HOST_SURGE_PROFILE in .env.local to that absolute path.
+      - "${HOST_SURGE_PROFILE:?Set HOST_SURGE_PROFILE in .env.local to the absolute path of your Surge profile}:/surge/profile.conf"
+
+    # Required on Linux Docker hosts; macOS Docker Desktop already provides this
+    # name automatically, but declaring it is harmless.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

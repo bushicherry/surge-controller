@@ -3,6 +3,7 @@ import { getSetting } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
 import { sanitize } from "@/lib/sanitizer";
 import { env } from "@/lib/env";
+import { getUserDirectRules } from "@/lib/apply";
 
 /** Dry-run: fetch + sanitize, return report only. */
 export async function POST(req: Request) {
@@ -15,7 +16,10 @@ export async function POST(req: Request) {
     const res = await fetch(subUrl, { headers: { "User-Agent": env.surgeUA }, cache: "no-store" });
     if (!res.ok) return bad(`fetch failed: ${res.status}`);
     const raw = await res.text();
-    const { report } = sanitize(raw, { httpApiValue });
+    const { report } = sanitize(raw, {
+      httpApiValue,
+      userDirectRules: getUserDirectRules(),
+    });
     return ok({ report, bytes: raw.length });
   });
 }

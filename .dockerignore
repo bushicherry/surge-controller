@@ -1,0 +1,11 @@
+node_modules
+.next
+data
+.git
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+README.md
+scripts/com.bushicherry.surgecontroller.plist

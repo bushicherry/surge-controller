@@ -58,4 +58,7 @@ export const surge = {
   events: () => call<unknown>("/v1/events"),
   // Returns generic Surge "features/system" info (best-effort)
   outboundIp: () => call<unknown>("/v1/features/system_proxy").catch(() => null),
+  // Returns the raw rules currently loaded in Surge. Shape:
+  //   { rules: string[] }  — each element is a "TYPE,VALUE,POLICY[,...opts]" line.
+  rules: () => call<{ rules: string[] }>("/v1/rules"),
 };

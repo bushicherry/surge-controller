@@ -1,7 +1,7 @@
 import { requireAccess } from "@/lib/auth";
-import SubscriptionForm from "@/components/SubscriptionForm";
+import RulesView from "@/components/RulesView";
 
 export default async function Page() {
   await requireAccess();
-  return <SubscriptionForm />;
+  return <RulesView />;
 }

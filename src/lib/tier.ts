@@ -3,13 +3,16 @@ import { getJSON, setJSON } from "./db";
 export type Tier = 1 | 2 | 3 | 0; // 0 = unknown/other
 
 export const TIER_GROUPS = {
-  tier1: "🌏 Tier1-JP/SG/TW",
+  tier1: "🌏 Tier1-JP/SG/CN",
   tier2: "🇭🇰 Tier2-HK",
   tier3: "🌍 Tier3-EU/US",
 } as const;
 
 // Default regex/keyword matchers by tier.
-const T1 = /(🇯🇵|🇸🇬|🇹🇼|日本|東京|东京|JP|新加坡|狮城|SG|台灣|台湾|TW)/i;
+// Classifier stays tolerant of both TW and CN inputs since upstream subscription
+// lists may still use 🇹🇼 / 台灣 for nodes physically hosted in Taiwan — we
+// bucket them into tier1 all the same.
+const T1 = /(🇯🇵|🇸🇬|🇨🇳|🇹🇼|日本|東京|东京|JP|新加坡|狮城|SG|中国|中國|CN|台灣|台湾|TW)/i;
 const T2 = /(🇭🇰|香港|HK|HongKong)/i;
 const T3 =
   /(🇺🇸|🇬🇧|🇩🇪|🇫🇷|🇨🇦|🇳🇱|🇮🇪|🇨🇭|🇸🇪|🇮🇹|🇪🇸|🇦🇺|美國|美国|US|英国|英國|UK|德国|法国|加拿大|荷兰|澳洲|澳大利亚|EU)/i;

@@ -15,7 +15,7 @@
   <array>
     <string>/bin/zsh</string>
     <string>-lc</string>
-    <string>exec yarn start</string>
+    <string>mkdir -p data &amp;&amp; exec yarn start</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>

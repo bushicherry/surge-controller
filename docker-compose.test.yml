@@ -1,0 +1,69 @@
+# =====================================================================
+# Local UI test rig — spins up the app + a mock Surge HTTP-API together.
+# No real Surge required. Use for smoke-testing on your dev machine.
+#
+#   docker compose -f docker-compose.test.yml up --build
+#   open http://localhost:3000
+#   ./scripts/smoke-test.sh   # in a second terminal
+#   docker compose -f docker-compose.test.yml down -v
+#
+# UI: browser at http://localhost:3000 — LAN mode is on so no login needed.
+# =====================================================================
+
+services:
+  mock-surge:
+    image: node:20-bookworm-slim
+    container_name: surge-controller-mock
+    working_dir: /app
+    volumes:
+      - ./scripts/mock-surge.mjs:/app/mock-surge.mjs:ro
+    command: ["node", "/app/mock-surge.mjs"]
+    environment:
+      PORT: "6171"
+      API_KEY: "surgepasswd"
+    expose:
+      - "6171"
+
+  surge-controller:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: surge-controller:test
+    container_name: surge-controller-test
+    depends_on:
+      - mock-surge
+    ports:
+      - "3000:3000"
+    environment:
+      # LAN bypass so we can hit the UI without GitHub OAuth.
+      LAN_TRUSTED_HOSTS: "localhost:3000,127.0.0.1:3000"
+      # Talk to the mock instead of a real Surge.
+      SURGE_API_HOST: "http://mock-surge:6171"
+      SURGE_API_KEY: "surgepasswd"
+      # Any 32-byte-ish random value works for the test rig.
+      NEXTAUTH_SECRET: "test-only-not-secret-please-do-not-reuse-anywhere"
+      APP_ENC_KEY: "test-only-not-secret-please-do-not-reuse-anywhere"
+      # Fake profile file lives inside the container's tmp volume.
+      SURGE_PROFILE_PATH: "/tmp/surge-profile/Default.conf"
+      DB_PATH: "/data/app.db"
+      NEXTAUTH_URL: "http://localhost:3000"
+    volumes:
+      - test-data:/data
+      - test-profile:/tmp/surge-profile
+
+  # One-shot init: seed a syntactically valid empty Surge profile file so the
+  # subscription updater has something to write to during tests.
+  seed-profile:
+    image: busybox
+    container_name: surge-controller-seed
+    volumes:
+      - test-profile:/tmp/surge-profile
+    command: >
+      sh -c "test -f /tmp/surge-profile/Default.conf ||
+             printf '[General]\nhttp-api = surgepasswd@0.0.0.0:6171\n\n[Proxy]\n\n[Proxy Group]\n\n[Rule]\nFINAL,DIRECT\n'
+             > /tmp/surge-profile/Default.conf"
+    restart: "no"
+
+volumes:
+  test-data:
+  test-profile:
