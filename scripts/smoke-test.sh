@@ -81,6 +81,14 @@ case "$CUR_MODE" in direct|rule|proxy|global) ;; *) CUR_MODE=rule ;; esac
 check "POST /api/surge/outbound-mode (idem)" POST "/api/surge/outbound-mode"     "{\"mode\":\"$CUR_MODE\"}"
 check "POST /api/surge/test-latency ($GROUP)" POST "/api/surge/test-latency"     "{\"group\":\"$GROUP\"}" "latencies"
 
+# Current selection for GROUP, then re-select it (idempotent) to exercise the
+# policy_groups/select read+write paths that were previously broken.
+_pg_body=$(curl -sS --max-time 10 ${_hdr[@]+"${_hdr[@]}"} "$BASE/api/surge/policy-groups" || echo '{}')
+CUR_SEL=$(printf '%s' "$_pg_body" | sed -nE "s/.*\"selected\"[^}]*\"$GROUP\"[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\1/p")
+if [[ -n "$CUR_SEL" ]]; then
+  check "POST /api/surge/select (idem)"      POST "/api/surge/select" "{\"group\":\"$GROUP\",\"policy\":\"$CUR_SEL\"}"
+fi
+
 # --- Rules & user-managed direct rules ---
 check "GET /rules (UI reachable)"           GET  "/rules"                        "" ""       "23"
 check "GET /api/surge/rules"                GET  "/api/surge/rules"              "" "rules"

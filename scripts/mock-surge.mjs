@@ -10,9 +10,10 @@
  *
  * Endpoints:
  *   GET  /v1/policy_groups
- *   GET  /v1/policies/select
- *   POST /v1/policies/select        {group_name, policy}
- *   POST /v1/test/group_delay       {group_name}
+ *   GET  /v1/policy_groups/select?group_name=
+ *   POST /v1/policy_groups/select   {group_name, policy}
+ *   POST /v1/policy_groups/test     {group_name}
+ *   POST /v1/policies/test          {policy_names, url}
  *   GET  /v1/outbound
  *   POST /v1/outbound               {mode}
  *   POST /v1/profiles/reload
@@ -113,26 +114,36 @@ const server = http.createServer(async (req, res) => {
           Object.entries(POLICIES_BY_GROUP).map(([g, ps]) => [g, toEntries(ps)])
         ));
 
-      case "GET /v1/policies/select":
-        return json(res, 200, state.selected);
+      case "GET /v1/policy_groups/select": {
+        const group = url.searchParams.get("group_name") ?? "";
+        return json(res, 200, { policy: state.selected[group] ?? "" });
+      }
 
-      case "POST /v1/policies/select": {
+      case "POST /v1/policy_groups/select": {
         const b = await readJson(req);
         if (!b.group_name || !b.policy) return json(res, 400, { error: "missing fields" });
         state.selected[b.group_name] = b.policy;
         return json(res, 200, {});
       }
 
-      case "POST /v1/test/group_delay": {
+      case "POST /v1/policy_groups/test": {
         const b = await readJson(req);
         const list = POLICIES_BY_GROUP[b.group_name] ?? [];
-        // Assign deterministic-ish latencies based on the flag prefix.
+        return json(res, 200, { available: list.filter((p) => p !== "DIRECT") });
+      }
+
+      case "POST /v1/policies/test": {
+        const b = await readJson(req);
+        const names = Array.isArray(b.policy_names) ? b.policy_names : [];
+        // Shape mirrors real Surge: { name: { tcp, receive, available, round-one-total } }
         const out = {};
-        for (const p of list) {
-          if (p === "DIRECT") out[p] = 5;
-          else if (p.startsWith("🇯🇵") || p.startsWith("🇸🇬") || p.startsWith("🇨🇳")) out[p] = 40 + Math.floor(Math.random() * 30);
-          else if (p.startsWith("🇭🇰")) out[p] = 60 + Math.floor(Math.random() * 40);
-          else out[p] = 180 + Math.floor(Math.random() * 120);
+        for (const p of names) {
+          let receive;
+          if (p === "DIRECT") receive = 5;
+          else if (p.startsWith("🇯🇵") || p.startsWith("🇸🇬") || p.startsWith("🇨🇳")) receive = 40 + Math.floor(Math.random() * 30);
+          else if (p.startsWith("🇭🇰")) receive = 60 + Math.floor(Math.random() * 40);
+          else receive = 180 + Math.floor(Math.random() * 120);
+          out[p] = { tcp: Math.floor(receive / 4), receive, available: 1, "round-one-total": receive + 20 };
         }
         return json(res, 200, out);
       }

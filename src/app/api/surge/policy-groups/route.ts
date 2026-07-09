@@ -5,10 +5,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   return withAuth(req, async () => {
-    const [groups, selected] = await Promise.all([
-      surge.policyGroups(),
-      surge.selectPolicies().catch(() => ({} as Record<string, string>)),
-    ]);
+    const groups = await surge.policyGroups();
+    const selected = await surge
+      .selectPolicies(Object.keys(groups))
+      .catch(() => ({} as Record<string, string>));
     return ok({ groups, selected });
   });
 }
