@@ -17,6 +17,8 @@ COPY . .
 # Dummy envs only for build; real values come from runtime.
 ENV NEXTAUTH_SECRET=build-time
 ENV APP_ENC_KEY=build-time
+# Emit .next/standalone (server.js) — only needed for the Docker runtime.
+ENV BUILD_STANDALONE=1
 RUN yarn build
 
 # ----------- 3. runner: minimal image -----------

@@ -2,8 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // Emit a self-contained server bundle at .next/standalone for Docker.
-  output: "standalone",
+  // Standalone output is only for the Docker image (started via `node server.js`).
+  // Native/launchd runs `next start`, which is incompatible with standalone.
+  output: process.env.BUILD_STANDALONE ? "standalone" : undefined,
   serverExternalPackages: ["better-sqlite3"],
 };
 
