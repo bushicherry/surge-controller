@@ -1,10 +1,14 @@
 import { TIER_GROUPS, classify, getOverrides, type Tier } from "./tier";
 
-// Surge 5 supported proxy types (whitelist). Anything else (e.g. anytls) is dropped.
+// Surge 5 supported proxy types (whitelist). Anything else is dropped.
+// Ref: https://manual.nssurge.com/policy/proxy.html
+// Intentionally NOT included (require Surge 6.x, unusable on Surge 5.10.5):
+//   anytls (Mac 6.4.3+), trust-tunnel (6.4.4+), h2-connect (6.6.0+).
+// vless is intentionally absent too: Surge does not support VLESS at all.
 const ALLOWED_TYPES = new Set([
-  "http", "https", "socks5", "socks5-tls",
+  "http", "https", "socks5", "socks5-tls", "ssh",
   "ss", "shadowsocks",
-  "trojan", "vmess", "vless",
+  "trojan", "vmess",
   "snell", "tuic", "hysteria2",
   "wireguard", "direct", "reject", "reject-tinygif",
   "external",
@@ -28,6 +32,10 @@ export function userRuleLine(r: UserDirectRule): string {
 
 export type SanitizeReport = {
   removedProxies: string[];
+  // Dropped proxies grouped by their (unsupported) type, e.g.
+  //   { anytls: ["JP-01", "SG-02"], vless: ["HK-03"] }
+  // Lets the UI show how many nodes are waiting on a Surge 6 upgrade.
+  removedByType: Record<string, string[]>;
   affectedGroups: string[];
   tier1: string[];
   tier2: string[];
@@ -138,6 +146,7 @@ export function sanitize(input: string, opts: SanitizeOptions): {
   const sections = parseSections(input);
   const report: SanitizeReport = {
     removedProxies: [],
+    removedByType: {},
     affectedGroups: [],
     tier1: [],
     tier2: [],
@@ -157,6 +166,7 @@ export function sanitize(input: string, opts: SanitizeOptions): {
       if (!parsed) { next.push(line); continue; }
       if (!ALLOWED_TYPES.has(parsed.type)) {
         report.removedProxies.push(parsed.name);
+        (report.removedByType[parsed.type] ??= []).push(parsed.name);
         continue;
       }
       keptProxyNames.add(parsed.name);
