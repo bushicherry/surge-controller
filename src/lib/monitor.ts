@@ -92,13 +92,31 @@ async function readBattery(): Promise<BatteryInfo> {
 // Module-level sample so we can diff netstat byte counters between polls.
 let lastNet: { iface: string; rx: number; tx: number; ts: number } | null = null;
 
-async function defaultIface(): Promise<string | null> {
-  const out = await run("/sbin/route", ["-n", "get", "default"]);
-  return out.match(/interface:\s+(\S+)/)?.[1] ?? null;
+async function physicalIface(): Promise<string | null> {
+  // Surge runs as a VPN, so the system default route points at its `utun*`
+  // tunnel — not the real uplink. Pick the physical `en*` default route
+  // instead (e.g. en9 = USB Ethernet); this is what "is the cable plugged in"
+  // and real throughput should be measured on.
+  const routes = await run("/usr/sbin/netstat", ["-rn", "-f", "inet"]);
+  const enDefault = routes
+    .split("\n")
+    .filter((l) => /^default\b/.test(l))
+    .map((l) => l.trim().split(/\s+/).pop() ?? "")
+    .find((ifc) => /^en\d+$/.test(ifc));
+  if (enDefault) return enDefault;
+
+  // Uplink down / no physical default route: fall back to the first active en*
+  // that still has an IPv4, so we can at least report link state.
+  const list = (await run("/sbin/ifconfig", ["-l"])).trim().split(/\s+/);
+  for (const ifc of list.filter((n) => /^en\d+$/.test(n))) {
+    const info = await run("/sbin/ifconfig", [ifc]);
+    if (/status:\s+active/i.test(info) && /\binet\s/.test(info)) return ifc;
+  }
+  return null;
 }
 
 async function readNet(): Promise<NetInfo> {
-  const iface = await defaultIface();
+  const iface = await physicalIface();
   if (!iface) return { iface: null, linkUp: false, rxMbps: null, txMbps: null };
 
   const [ifcfg, netstat] = await Promise.all([

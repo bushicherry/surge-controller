@@ -50,7 +50,10 @@ export default function SystemMonitor() {
     batt == null ? "text-muted" :
     batt >= 90 ? "text-red-500" :
     batt >= 78 ? "text-yellow-500" : "text-green-500";
-  const battWarn = batt != null && batt >= 90 && battery.source === "AC Power";
+  // AlDente targets 70%; still charging well above that on AC likely means the
+  // cap isn't enforcing.
+  const battWarn =
+    batt != null && batt >= 80 && battery.source === "AC Power" && battery.state === "charging";
 
   return (
     <section className="card p-4 space-y-3">
