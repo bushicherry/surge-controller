@@ -1,6 +1,6 @@
 import { ok, bad, withAuth } from "@/lib/util";
 import { getSetting, setSetting } from "@/lib/db";
-import { decrypt } from "@/lib/crypto";
+import { decrypt, encrypt } from "@/lib/crypto";
 import { sanitize } from "@/lib/sanitizer";
 import { writeProfileAtomic } from "@/lib/profile";
 import { surge } from "@/lib/surge";
@@ -10,6 +10,15 @@ import { SUB_RAW_KEY, getUserDirectRules } from "@/lib/apply";
 
 export async function POST(req: Request) {
   return withAuth(req, async (ctx) => {
+    // Persist a URL typed in the form (body) so "type + update" works without
+    // a separate Save; otherwise fall back to the previously saved value.
+    const body = await req.json().catch(() => ({} as Record<string, unknown>));
+    const typed = typeof body?.subscription_url === "string" ? body.subscription_url.trim() : "";
+    if (typed) {
+      if (!/^https?:\/\//i.test(typed)) return bad("subscription_url must be http(s)");
+      setSetting("subscription_url_enc", encrypt(typed));
+    }
+
     const url = getSetting("subscription_url_enc");
     const profilePath = getSetting("profile_path") || env.surgeProfilePath;
     const httpApiValue = getSetting("http_api_value")

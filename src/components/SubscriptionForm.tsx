@@ -50,10 +50,14 @@ export default function SubscriptionForm() {
     try {
       const r = await jsonFetch<{ report: unknown }>(
         dryRun ? "/api/subscription/preview" : "/api/subscription/update",
-        { method: "POST" }
+        {
+          method: "POST",
+          body: JSON.stringify(subUrl ? { subscription_url: subUrl } : {}),
+        }
       );
       setReport(r.report);
       setMsg(dryRun ? "Dry run 完成" : "更新+reload 完成");
+      if (!dryRun && subUrl) { setSubUrl(""); await mutate(); }
     } catch (e) { setMsg(String((e as Error).message)); }
     finally { setBusy(false); }
   };

@@ -8,11 +8,16 @@ import { getUserDirectRules } from "@/lib/apply";
 /** Dry-run: fetch + sanitize, return report only. */
 export async function POST(req: Request) {
   return withAuth(req, async () => {
-    const url = getSetting("subscription_url_enc");
-    if (!url) return bad("subscription_url not configured");
+    // Prefer a URL typed in the form (sent in the body) so "type + preview"
+    // works without first hitting Save; fall back to the saved encrypted URL.
+    const body = await req.json().catch(() => ({} as Record<string, unknown>));
+    const typed = typeof body?.subscription_url === "string" ? body.subscription_url.trim() : "";
+    const saved = getSetting("subscription_url_enc");
+    const subUrl = typed || (saved ? decrypt(saved) : "");
+    if (!subUrl) return bad("subscription_url not configured");
+    if (!/^https?:\/\//i.test(subUrl)) return bad("subscription_url must be http(s)");
     const httpApiValue = getSetting("http_api_value")
       || `${env.surgeApiKey}@0.0.0.0:6171`;
-    const subUrl = decrypt(url);
     const res = await fetch(subUrl, { headers: { "User-Agent": env.surgeUA }, cache: "no-store" });
     if (!res.ok) return bad(`fetch failed: ${res.status}`);
     const raw = await res.text();

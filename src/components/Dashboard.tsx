@@ -2,6 +2,7 @@
 import useSWR from "swr";
 import { useMemo, useState } from "react";
 import { jsonFetch, swrFetcher } from "@/lib/fetcher";
+import SystemMonitor from "./SystemMonitor";
 
 type Entry = { isGroup: 0 | 1; name: string; typeDescription: string; enabled: 0 | 1 };
 type PG = Record<string, Entry[]>;
@@ -67,6 +68,18 @@ export default function Dashboard() {
     finally { setBusy(null); }
   };
 
+  // True only when `group` is one of our tier groups, is an actual member of
+  // the Proxy group, and Proxy isn't already pointing at it. Selecting a
+  // non-member policy on Proxy makes Surge return "invalid parameters".
+  const canFlipProxyTo = (group: string): boolean => {
+    const groups = pg?.groups ?? {};
+    const selected = pg?.selected ?? {};
+    const isTierGroup = (Object.values(TIER) as string[]).includes(group);
+    if (!isTierGroup) return false;
+    if (selected["Proxy"] === group) return false;
+    return (groups["Proxy"] ?? []).some(e => e.name === group);
+  };
+
   const setMode = (mode: string) =>
     run(`mode:${mode}`, async () => {
       await jsonFetch("/api/surge/outbound-mode", { method: "POST", body: JSON.stringify({ mode }) });
@@ -82,9 +95,9 @@ export default function Dashboard() {
       // If the group we just picked in is a tier subgroup, also switch the
       // master `Proxy` group to that tier — otherwise effective routing
       // still resolves through whichever tier `Proxy` was pointing at, and
-      // the tap feels like a no-op.
-      const isTierGroup = (Object.values(TIER) as string[]).includes(group);
-      if (isTierGroup && selected["Proxy"] !== group) {
+      // the tap feels like a no-op. Only flip when the tier group is really a
+      // member of Proxy; otherwise Surge rejects it with "invalid parameters".
+      if (canFlipProxyTo(group)) {
         await jsonFetch("/api/surge/select", {
           method: "POST", body: JSON.stringify({ group: "Proxy", policy: group }),
         });
@@ -117,9 +130,9 @@ export default function Dashboard() {
       // Same as select(): auto-best on a tier subgroup only updates that
       // subgroup's selection. If Proxy still points at a *different* tier,
       // the banner would show the pick but the effective leaf wouldn't
-      // change — so we also flip Proxy to that tier.
-      const isTierGroup = (Object.values(TIER) as string[]).includes(group);
-      if (isTierGroup && selected["Proxy"] !== group) {
+      // change — so we also flip Proxy to that tier (only if it's a real
+      // member of Proxy, else Surge returns "invalid parameters").
+      if (canFlipProxyTo(group)) {
         await jsonFetch("/api/surge/select", {
           method: "POST", body: JSON.stringify({ group: "Proxy", policy: group }),
         });
@@ -203,6 +216,9 @@ export default function Dashboard() {
           <div className="text-xs text-muted truncate">via {statusVia}</div>
         )}
       </section>
+
+      {/* Surge machine resource / power / network monitor ---------------- */}
+      <SystemMonitor />
 
       {/* Outbound mode --------------------------------------------------- */}
       <section className="card p-4 space-y-3">

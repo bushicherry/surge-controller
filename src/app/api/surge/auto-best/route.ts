@@ -20,8 +20,15 @@ export async function POST(req: Request) {
     if (!pick) return bad("no reachable node");
 
     if (p.data.apply) {
-      await surge.selectPolicy(p.data.group, pick.name);
-      audit({ userId: ctx.userId, action: "auto-best", payload: { group: p.data.group, pick: pick.name } });
+      try {
+        await surge.selectPolicy(p.data.group, pick.name);
+        audit({ userId: ctx.userId, action: "auto-best", payload: { group: p.data.group, pick: pick.name, ok: true } });
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        audit({ userId: ctx.userId, action: "auto-best", payload: { group: p.data.group, pick: pick.name, ok: false, error } });
+        console.error(`[auto-best] apply failed group=${JSON.stringify(p.data.group)} pick=${JSON.stringify(pick.name)}: ${error}`);
+        return bad(`auto-best apply failed: ${error}`, 502);
+      }
     }
     return ok({ group: p.data.group, pick, ranking });
   });
