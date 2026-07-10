@@ -24,22 +24,30 @@ Code changes so far live only on the dev Mac until a `deploy`.
 - [x] **Q2** subscription-URL preview/update fix (code).
 - [x] **Q3** select 400 guard + success/failure audit logging (code).
 - [x] **Q4** monitor backend + Dashboard card (code); temp dual-source.
-- [ ] **SSH key auth**: `ssh-copy-id jeffreychen@192.168.1.1` (currently password-prompts each call).
-- [ ] **Deploy to the box**: `scripts/remote.sh deploy` (first real end-to-end run).
-- [~] **Lid-closed keep-awake**: CHECKED — idle sleep is off (`sleep 0` + nfsd
-      `PreventUserIdleSystemSleep`), but **`SleepDisabled` is NOT set**, so lid
-      close will still sleep unless an external display is attached. To guarantee
-      headless 24x7: `sudo pmset -a disablesleep 1` (run via `remote.sh ssh`).
-- [ ] **Verify monitor** renders on the box (CPU/mem/battery/net); confirm `net.iface`
-      is the real default interface and Mbps populate after 2 polls.
-- [ ] **Temp decision**: keep `osx-cpu-temp` (CPU only) OR enable powermetrics
-      (CPU+GPU+fan) via passwordless sudoers + `MONITOR_POWERMETRICS=1`.
+- [x] **SSH key auth**: `id_ed25519` installed via `ssh-copy-id`; passwordless confirmed.
+- [x] **Deploy to the box**: `scripts/remote.sh deploy` works end-to-end (pull/install/build/kickstart).
+- [x] **Verify monitor**: after fixing iface detection → `en9` (USB Ethernet),
+      `linkUp: true`, rx/tx ~1.3 Mbps populate on 2nd poll. CPU/mem/battery OK.
+- [x] **Temp decision**: keep `osx-cpu-temp` (no sudo) — it returns **CPU 35° AND
+      GPU 39°** on this box. Fan is N/A without powermetrics; enable powermetrics
+      later only if fan rpm is needed (`MONITOR_POWERMETRICS=1` + sudoers).
+- [~] **Lid-closed keep-awake**: CHECKED — idle sleep off, but **`SleepDisabled`
+      NOT set**. To guarantee headless 24x7: `sudo pmset -a disablesleep 1`
+      (via `remote.sh ssh`). PENDING user action.
+- [!] **Battery observation**: monitor shows **84% charging on AC** while AlDente
+      should cap at 70% → dashboard now warns. Verify AlDente is actually
+      enforcing the cap (or it's a scheduled calibration top-up).
 - [ ] **Reproduce select flow** on the box; if a 400 remains, read the exact
       `{group, policy, error}` via `scripts/remote.sh audit`.
 - [ ] **Run subscription update** end-to-end so the tool's tier groups actually
       exist in the live profile (unblocks the tier-flip path).
 - [ ] **Harden plist** (blind spots): real `NEXTAUTH_SECRET` + `APP_ENC_KEY`,
       `ThrottleInterval`, absolute `DB_PATH`.
+
+### Network detection note
+`route -n get default` returns Surge's `utun*` tunnel (Surge is the system VPN).
+`physicalIface()` instead parses `netstat -rn -f inet` and picks the `en*`
+default route (en9 here, gw 192.168.100.1). Wi-Fi `en0` is inactive on this box.
 
 ---
 
