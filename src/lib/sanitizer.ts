@@ -194,6 +194,18 @@ export function sanitize(input: string, opts: SanitizeOptions): {
       );
       // Now strictly remove members that match a removedProxy name
       g.members = g.members.filter(m => !report.removedProxies.includes(m));
+      // The master `Proxy` select group must reference our managed tier groups,
+      // otherwise selecting Proxy -> a tier (the region quick-switch) makes
+      // Surge return "invalid parameters" (non-member). Add them, deduped, in
+      // front of the raw nodes so tiers are the primary options.
+      if (g.name === "Proxy" && g.type === "select") {
+        const existing = new Set(g.members);
+        const tierNames = Object.values(TIER_GROUPS).filter(n => !existing.has(n));
+        if (tierNames.length) {
+          g.members = [...tierNames, ...g.members];
+          report.affectedGroups.push(g.name);
+        }
+      }
       if (g.members.length === 0) {
         g.members.push("DIRECT");
         report.affectedGroups.push(g.name);
