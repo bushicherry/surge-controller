@@ -44,6 +44,26 @@ Code changes so far live only on the dev Mac until a `deploy`.
 - [ ] **Harden plist** (blind spots): real `NEXTAUTH_SECRET` + `APP_ENC_KEY`,
       `ThrottleInterval`, absolute `DB_PATH`.
 
+### Round 2 (Jul 11) — 10-item feedback, all deployed & verified
+- **#9 keystone**: Surge was running `Airport0708`, app writes `Airport.conf`.
+  `reload` only reloads the *active* profile → updates never applied. Fix:
+  update route now `switchProfile(basename)` + reload. Verified: profile→Airport.
+- **#3 select 400**: `auto`=url-test, `fallback`=fallback → reject `/select`.
+  Policy-groups API now returns `groupTypes`; Dashboard makes non-select groups
+  read-only. Also the sanitizer now adds tier groups as **members of Proxy**
+  (they weren't) so region quick-switch works. Verified: select Proxy→Tier2-HK 200.
+- **#7 tiering**: flag-first classify; "CN2"/"CMIN2" no longer drags 🇭🇰 into
+  tier1. Verified: Tier2-HK=[HK CN2, HK 9929].
+- **#5 fan flicker**: dropped `osx-cpu-temp -f` (garbage rpm). Fan=powermetrics only.
+- **#4 logging**: `src/lib/log.ts` structured multi-line + levels; audit carries level.
+- **#8 form**: keep URL after preview/update, show which URL is used + switch result.
+- **#2 net**: relabeled to single throughput line (soft-router up≈down).
+- **#10**: auto-best shows 测速中… immediately.
+- **#6**: SystemMonitor sparkline charts (CPU/mem/net/temp), 60-sample rolling.
+- **#1 answer**: monitor polls every 4s, SWR pauses when tab hidden; each poll
+  spawns ~8 short CLI procs (sysctl/vm_stat/pmset/netstat/ifconfig/osx-cpu-temp).
+  Impact minimal (<1% avg). powermetrics intentionally NOT used (heavy + sudo).
+
 ### Network detection note
 `route -n get default` returns Surge's `utun*` tunnel (Surge is the system VPN).
 `physicalIface()` instead parses `netstat -rn -f inet` and picks the `en*`
