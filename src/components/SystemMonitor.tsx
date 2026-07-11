@@ -103,8 +103,16 @@ export default function SystemMonitor() {
           }
         />
 
-        <Metric label="下行" value={net.rxMbps != null ? `${net.rxMbps.toFixed(2)} Mbps` : "—"} />
-        <Metric label="上行" value={net.txMbps != null ? `${net.txMbps.toFixed(2)} Mbps` : "—"} />
+        <div className="col-span-2">
+          <Metric
+            label="网络吞吐（软路由上下行接近，作活动量参考）"
+            value={
+              net.rxMbps != null || net.txMbps != null
+                ? `↓ ${(net.rxMbps ?? 0).toFixed(2)} · ↑ ${(net.txMbps ?? 0).toFixed(2)} Mbps`
+                : "—"
+            }
+          />
+        </div>
       </div>
     </section>
   );

@@ -20,8 +20,7 @@ export async function POST(req: Request) {
       // the group isn't a `select` type. Record the full context so it stops
       // being a silent 400 (previously only *successful* selects were logged).
       const error = e instanceof Error ? e.message : String(e);
-      audit({ userId: ctx.userId, action: "select", payload: { group, policy, ok: false, error } });
-      console.error(`[select] failed group=${JSON.stringify(group)} policy=${JSON.stringify(policy)}: ${error}`);
+      audit({ userId: ctx.userId, action: "select", level: "error", payload: { group, policy, ok: false, error } });
       return bad(`select failed: ${error}`, 502);
     }
   });

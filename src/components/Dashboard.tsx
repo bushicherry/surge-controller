@@ -52,7 +52,8 @@ const MODE_META: Record<string, { dot: string; blurb: string }> = {
 
 export default function Dashboard() {
   const { data: pg, mutate: refreshGroups } =
-    useSWR<{ groups: PG; selected: Record<string, string> }>("/api/surge/policy-groups", swrFetcher);
+    useSWR<{ groups: PG; selected: Record<string, string>; groupTypes?: Record<string, string> }>(
+      "/api/surge/policy-groups", swrFetcher);
   const { data: outbound, mutate: refreshOutbound } =
     useSWR<{ mode: string }>("/api/surge/outbound-mode", swrFetcher, { refreshInterval: 5000 });
 
@@ -66,6 +67,20 @@ export default function Dashboard() {
     try { await fn(); }
     catch (e) { setMsg(String((e as Error).message ?? e)); }
     finally { setBusy(null); }
+  };
+
+  // Groups whose Surge type auto-picks their member — a manual /select on them
+  // returns "invalid parameters". Only `select`-type groups are selectable.
+  const NON_SELECTABLE = new Set([
+    "Automatic Testing Group", // url-test
+    "Fallback Group",          // fallback
+    "Load Balance Group",      // load-balance
+  ]);
+  const isSelectable = (group: string): boolean => {
+    const t = pg?.groupTypes?.[group];
+    // Unknown type (e.g. top-level Proxy select group, never referenced as a
+    // member) defaults to selectable.
+    return !t || !NON_SELECTABLE.has(t);
   };
 
   // True only when `group` is one of our tier groups, is an actual member of
@@ -116,6 +131,9 @@ export default function Dashboard() {
 
   const autoBest = (group: string) =>
     run(`auto:${group}`, async () => {
+      // The server measures every node's latency before picking, which takes a
+      // few seconds — show progress instead of a silent spinner.
+      setMsg(`⚡ ${group} 测速中…`);
       const r = await jsonFetch<{
         pick: { name: string; score: number };
         ranking: { name: string; latency: number }[];
@@ -278,6 +296,7 @@ export default function Dashboard() {
           const sel = selected[groupName];
           const lats = latencies[groupName] ?? {};
           const isOpen = expanded[groupName] ?? false;
+          const selectable = isSelectable(groupName);
           return (
             <section key={groupName} className="card">
               <button
@@ -298,12 +317,20 @@ export default function Dashboard() {
                       disabled={busy === `test:${groupName}`}
                       className="btn-tap flex-1 text-xs">测延迟</button>
                     {/* Action button: accented text + border, but no filled
-                        background so it doesn't read as a toggle-on state. */}
-                    <button onClick={() => autoBest(groupName)}
-                      disabled={busy === `auto:${groupName}`}
-                      className="btn-tap flex-1 text-xs text-accent border-accent/60 font-medium">
-                      ⚡ 选最优
-                    </button>
+                        background so it doesn't read as a toggle-on state.
+                        Auto groups (url-test/fallback) auto-pick, so 选最优 /
+                        manual select would be rejected by Surge — hide it. */}
+                    {selectable ? (
+                      <button onClick={() => autoBest(groupName)}
+                        disabled={busy === `auto:${groupName}`}
+                        className="btn-tap flex-1 text-xs text-accent border-accent/60 font-medium">
+                        ⚡ 选最优
+                      </button>
+                    ) : (
+                      <span className="flex-1 text-xs text-muted self-center text-center">
+                        {pg?.groupTypes?.[groupName] === "Fallback Group" ? "自动故障转移组" : "自动测速组"}·只读
+                      </span>
+                    )}
                   </div>
                   <div className="space-y-1 max-h-80 overflow-auto -mx-1 px-1">
                     {entries.map(e => {
@@ -316,13 +343,14 @@ export default function Dashboard() {
                       const active = sel === e.name;
                       return (
                         <button key={e.name}
-                          onClick={() => select(groupName, e.name)}
-                          disabled={busy === `sel:${groupName}`}
+                          onClick={() => selectable && select(groupName, e.name)}
+                          disabled={!selectable || busy === `sel:${groupName}`}
                           aria-pressed={active}
                           className={`w-full text-left px-3 py-2.5 rounded-lg border flex items-center gap-2 transition
                             ${active
                               ? "bg-accent/15 border-accent"
-                              : "border-border hover:bg-bg"}`}>
+                              : "border-border hover:bg-bg"}
+                            ${!selectable ? "opacity-70 cursor-default hover:bg-transparent" : ""}`}>
                           <span className="flex-1 truncate text-sm">{e.name}</span>
                           {lat != null && <span className={`text-xs tabular-nums ${color}`}>{lat > 0 ? `${lat}ms` : "timeout"}</span>}
                         </button>

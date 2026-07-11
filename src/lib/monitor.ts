@@ -173,21 +173,19 @@ async function readTempPowermetrics(): Promise<TempInfo | null> {
   return { cpuC, gpuC, fanRpm, source: "powermetrics", available: true };
 }
 
-// osx-cpu-temp reads the SMC without root. Default CPU-only invocation is what
-// was verified on the box; GPU/fan flags are best-effort (0 → treated as N/A).
+// osx-cpu-temp reads the SMC without root. We only read CPU + GPU here — its
+// `-f` fan output is unreliable on this hardware (flickers 0/2 rpm), so fan rpm
+// is left to powermetrics.
 async function readTempOsxCpuTemp(): Promise<TempInfo | null> {
-  const [cpuOut, gpuOut, fanOut] = await Promise.all([
+  const [cpuOut, gpuOut] = await Promise.all([
     run(OSX_CPU_TEMP_BIN, [], 2000),
     run(OSX_CPU_TEMP_BIN, ["-g"], 2000),
-    run(OSX_CPU_TEMP_BIN, ["-f"], 2000),
   ]);
   const cpuC = numOr(cpuOut.match(/([\d.]+)\s*°?\s*C/i));
   let gpuC = numOr(gpuOut.match(/([\d.]+)\s*°?\s*C/i));
   if (gpuC === 0) gpuC = null; // unsupported sensor prints 0.0
-  let fanRpm = numOr(fanOut.match(/([\d.]+)\s*RPM/i));
-  if (fanRpm === 0) fanRpm = null;
-  if (cpuC == null && gpuC == null && fanRpm == null) return null;
-  return { cpuC, gpuC, fanRpm, source: "osx-cpu-temp", available: true };
+  if (cpuC == null && gpuC == null) return null;
+  return { cpuC, gpuC, fanRpm: null, source: "osx-cpu-temp", available: true };
 }
 
 async function readTemp(): Promise<TempInfo> {

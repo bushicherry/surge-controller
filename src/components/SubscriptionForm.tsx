@@ -48,7 +48,10 @@ export default function SubscriptionForm() {
   const update = async (dryRun: boolean) => {
     setBusy(true); setMsg(""); setReport(null);
     try {
-      const r = await jsonFetch<{ report: unknown }>(
+      const r = await jsonFetch<{
+        report: unknown; profileName?: string; previous?: string;
+        switched?: boolean; reloaded?: boolean;
+      }>(
         dryRun ? "/api/subscription/preview" : "/api/subscription/update",
         {
           method: "POST",
@@ -56,11 +59,24 @@ export default function SubscriptionForm() {
         }
       );
       setReport(r.report);
-      setMsg(dryRun ? "Dry run 完成" : "更新+reload 完成");
-      if (!dryRun && subUrl) { setSubUrl(""); await mutate(); }
+      if (dryRun) {
+        setMsg("预览完成（Dry-Run，未写入 / 未切换）");
+      } else {
+        const from = r.previous && r.previous !== r.profileName ? `（原 ${r.previous}）` : "";
+        setMsg(`更新完成 → 已启用 profile「${r.profileName}」${from}${r.reloaded ? " · 已 reload" : ""}`);
+        // Keep the typed URL visible; just refresh saved state.
+        await mutate();
+      }
     } catch (e) { setMsg(String((e as Error).message)); }
     finally { setBusy(false); }
   };
+
+  // Which URL the preview/update will actually use.
+  const urlSource = subUrl
+    ? "使用输入框中的 URL（更新时会保存）"
+    : data?.has_subscription
+      ? "使用已保存的订阅 URL"
+      : "⚠ 尚未配置订阅 URL，请先输入";
 
   return (
     <div className="space-y-4">
@@ -99,6 +115,7 @@ export default function SubscriptionForm() {
 
       <div className="card p-4 space-y-3">
         <div className="font-semibold">订阅更新</div>
+        <div className="text-xs text-muted">{urlSource}</div>
         <div className="flex gap-2">
           <button onClick={() => update(true)} disabled={busy} className="btn">预览 (Dry-Run)</button>
           <button onClick={() => update(false)} disabled={busy} className="btn btn-primary">立即更新 + Reload</button>

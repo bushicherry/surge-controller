@@ -88,6 +88,12 @@ export const surge = {
   setOutbound: (mode: "direct" | "rule" | "proxy" | "global") =>
     call("/v1/outbound", { method: "POST", body: JSON.stringify({ mode }) }),
   reload: () => call("/v1/profiles/reload", { method: "POST" }),
+  // The name of the profile Surge is currently running (filename minus .conf).
+  currentProfile: () => call<{ name?: string }>("/v1/profiles/current"),
+  // Activate a profile by name. `reload` only reloads the *active* profile, so
+  // writing a different file has no effect until we switch to it.
+  switchProfile: (name: string) =>
+    call("/v1/profiles/switch", { method: "POST", body: JSON.stringify({ name }) }),
   traffic: () => call<unknown>("/v1/traffic"),
   events: () => call<unknown>("/v1/events"),
   // Returns generic Surge "features/system" info (best-effort)

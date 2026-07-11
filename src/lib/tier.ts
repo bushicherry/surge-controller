@@ -8,19 +8,29 @@ export const TIER_GROUPS = {
   tier3: "🌍 Tier3-EU/US",
 } as const;
 
-// Default regex/keyword matchers by tier.
-// Classifier stays tolerant of both TW and CN inputs since upstream subscription
-// lists may still use 🇹🇼 / 台灣 for nodes physically hosted in Taiwan — we
-// bucket them into tier1 all the same.
-const T1 = /(🇯🇵|🇸🇬|🇨🇳|🇹🇼|日本|東京|东京|JP|新加坡|狮城|SG|中国|中國|CN|台灣|台湾|TW)/i;
-const T2 = /(🇭🇰|香港|HK|HongKong)/i;
-const T3 =
-  /(🇺🇸|🇬🇧|🇩🇪|🇫🇷|🇨🇦|🇳🇱|🇮🇪|🇨🇭|🇸🇪|🇮🇹|🇪🇸|🇦🇺|美國|美国|US|英国|英國|UK|德国|法国|加拿大|荷兰|澳洲|澳大利亚|EU)/i;
+// Flag emojis are unambiguous, so they win. This prevents line-type tokens like
+// "CN2" / "CMIN2" (which contain "CN") from dragging a �� Hong Kong node into
+// tier1 via a bare "CN" keyword — the bug that put "🇭🇰 香港 CN2" in tier1.
+const FLAG_T1 = /🇯🇵|🇸🇬|🇨🇳|🇹🇼/;
+const FLAG_T2 = /🇭🇰/;
+const FLAG_T3 = /🇺🇸|🇬🇧|🇩🇪|🇫🇷|🇨🇦|🇳🇱|🇮🇪|🇨🇭|🇸🇪|🇮🇹|🇪🇸|🇦🇺/;
+
+// Text fallback for names without a flag. ASCII tokens are word-boundaried and
+// we deliberately avoid bare "CN"/"TW" so "CN2"/line names don't false-match.
+const TXT_T1 = /(日本|東京|东京|新加坡|狮城|中国|中國|台灣|台湾|\bJP\b|\bSG\b)/i;
+const TXT_T2 = /(香港|HongKong|\bHK\b)/i;
+const TXT_T3 =
+  /(美國|美国|英国|英國|德国|法国|加拿大|荷兰|澳洲|澳大利亚|\bUS\b|\bUK\b|\bEU\b)/i;
 
 export function defaultClassify(name: string): Tier {
-  if (T1.test(name)) return 1;
-  if (T2.test(name)) return 2;
-  if (T3.test(name)) return 3;
+  // Flag first (region intent), HK before others for clarity.
+  if (FLAG_T2.test(name)) return 2;
+  if (FLAG_T1.test(name)) return 1;
+  if (FLAG_T3.test(name)) return 3;
+  // Then keyword fallback, HK before JP/SG/CN.
+  if (TXT_T2.test(name)) return 2;
+  if (TXT_T1.test(name)) return 1;
+  if (TXT_T3.test(name)) return 3;
   return 0;
 }
 

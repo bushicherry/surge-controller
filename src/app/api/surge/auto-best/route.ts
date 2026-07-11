@@ -25,8 +25,7 @@ export async function POST(req: Request) {
         audit({ userId: ctx.userId, action: "auto-best", payload: { group: p.data.group, pick: pick.name, ok: true } });
       } catch (e) {
         const error = e instanceof Error ? e.message : String(e);
-        audit({ userId: ctx.userId, action: "auto-best", payload: { group: p.data.group, pick: pick.name, ok: false, error } });
-        console.error(`[auto-best] apply failed group=${JSON.stringify(p.data.group)} pick=${JSON.stringify(pick.name)}: ${error}`);
+        audit({ userId: ctx.userId, action: "auto-best", level: "error", payload: { group: p.data.group, pick: pick.name, ok: false, error } });
         return bad(`auto-best apply failed: ${error}`, 502);
       }
     }

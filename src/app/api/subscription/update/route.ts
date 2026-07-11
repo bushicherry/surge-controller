@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import { ok, bad, withAuth } from "@/lib/util";
 import { getSetting, setSetting } from "@/lib/db";
 import { decrypt, encrypt } from "@/lib/crypto";
@@ -49,16 +50,28 @@ export async function POST(req: Request) {
     // Write
     await writeProfileAtomic(profilePath, output);
 
-    // Reload
+    // Activate + reload. `surge.reload()` only reloads whatever profile is
+    // *currently active*; if Surge is running a different profile (e.g. an old
+    // dated one), writing our file has no visible effect. So switch Surge to
+    // the profile we manage (filename minus .conf) first, then reload.
+    const profileName = basename(profilePath).replace(/\.conf$/i, "");
+    const previous = await surge.currentProfile().then((p) => p?.name).catch(() => undefined);
+
+    let switched = true;
+    try {
+      if (previous !== profileName) await surge.switchProfile(profileName);
+    } catch { switched = false; }
+
     let reloaded = true;
     try { await surge.reload(); } catch { reloaded = false; }
 
     audit({
       userId: ctx.userId,
       action: "subscription-update",
-      payload: { ...report, reloaded, bytes: output.length },
+      level: switched && reloaded ? "info" : "warn",
+      payload: { ...report, profileName, previous, switched, reloaded, bytes: output.length },
     });
 
-    return ok({ report, reloaded });
+    return ok({ report, profileName, previous, switched, reloaded });
   });
 }
