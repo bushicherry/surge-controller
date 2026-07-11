@@ -1,7 +1,10 @@
 "use client";
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { swrFetcher } from "@/lib/fetcher";
+
+const HISTORY_LEN = 60; // ~4 min at a 4s poll
 
 type Snap = {
   ts: number;
@@ -23,6 +26,41 @@ function tempColor(c: number | null) {
   return c < 70 ? "text-green-500" : c < 85 ? "text-yellow-500" : "text-red-500";
 }
 
+function Sparkline({
+  points, stroke, max, unit,
+}: { points: number[]; stroke: string; max?: number; unit?: string }) {
+  const w = 100, h = 34, pad = 2;
+  const last = points.length ? points[points.length - 1] : 0;
+  if (points.length < 2) {
+    return <div className="h-[34px] flex items-center text-xs text-muted">采样中…</div>;
+  }
+  const hi = Math.max(max ?? 0, ...points, 1e-6);
+  const stepX = (w - pad * 2) / (points.length - 1);
+  const y = (v: number) => h - pad - (v / hi) * (h - pad * 2);
+  const pts = points.map((p, i) => `${(pad + i * stepX).toFixed(1)},${y(p).toFixed(1)}`);
+  const line = "M" + pts.join(" L");
+  const area = `M${pad},${h - pad} L${pts.join(" L")} L${(pad + (points.length - 1) * stepX).toFixed(1)},${h - pad} Z`;
+  const id = `sg-${stroke.replace(/[^a-z0-9]/gi, "")}`;
+  return (
+    <div className="relative">
+      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="w-full h-[34px]">
+        <defs>
+          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill={`url(#${id})`} />
+        <path d={line} fill="none" stroke={stroke} strokeWidth="1.5"
+          vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+      </svg>
+      <span className="absolute top-0 right-0 text-[10px] tabular-nums text-muted">
+        {last.toFixed(unit === "%" ? 0 : 2)}{unit}
+      </span>
+    </div>
+  );
+}
+
 function Metric({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
   return (
     <div className="space-y-0.5">
@@ -35,6 +73,15 @@ function Metric({ label, value, sub }: { label: string; value: ReactNode; sub?: 
 
 export default function SystemMonitor() {
   const { data, error } = useSWR<Snap>("/api/monitor", swrFetcher, { refreshInterval: 4000 });
+  const [history, setHistory] = useState<Snap[]>([]);
+
+  useEffect(() => {
+    if (!data) return;
+    setHistory((h) => {
+      if (h.length && h[h.length - 1].ts === data.ts) return h; // dedupe same sample
+      return [...h, data].slice(-HISTORY_LEN);
+    });
+  }, [data]);
 
   if (error) return null;
   if (!data) {
@@ -112,6 +159,25 @@ export default function SystemMonitor() {
                 : "—"
             }
           />
+        </div>
+      </div>
+
+      <div className="border-t border-border pt-3 grid grid-cols-2 gap-x-4 gap-y-3">
+        <div className="space-y-0.5">
+          <div className="text-xs text-muted">CPU %</div>
+          <Sparkline points={history.map((s) => s.cpu.utilPct)} stroke="#22c55e" max={100} unit="%" />
+        </div>
+        <div className="space-y-0.5">
+          <div className="text-xs text-muted">内存 %</div>
+          <Sparkline points={history.map((s) => s.mem.usedPct)} stroke="#6366f1" max={100} unit="%" />
+        </div>
+        <div className="space-y-0.5">
+          <div className="text-xs text-muted">下行 Mbps</div>
+          <Sparkline points={history.map((s) => s.net.rxMbps ?? 0)} stroke="#0ea5e9" unit="" />
+        </div>
+        <div className="space-y-0.5">
+          <div className="text-xs text-muted">CPU 温度 °C</div>
+          <Sparkline points={history.map((s) => s.temp.cpuC ?? 0)} stroke="#f59e0b" max={100} unit="°" />
         </div>
       </div>
     </section>
