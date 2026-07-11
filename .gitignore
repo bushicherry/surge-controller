@@ -10,3 +10,6 @@ tmp/
 *.log
 .DS_Store
 *.tsbuildinfo
+# Machine-specific launchd unit (absolute paths differ per host); use the
+# committed *.plist.example template instead.
+scripts/com.bushicherry.surgecontroller.plist

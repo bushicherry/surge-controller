@@ -198,7 +198,12 @@ export default function Dashboard() {
   }, [proxySel, leafNode]);
 
   const groupNames = Object.keys(groups);
-  const primaryGroups = groupNames.filter(g => g === "Proxy" || Object.values(TIER).includes(g as (typeof TIER)[keyof typeof TIER]));
+  // Tiers in explicit 1→2→3 order (Surge returns keys in arbitrary order, which
+  // used to render Tier2 before Tier1).
+  const orderedTiers = (["1", "2", "3"] as const)
+    .map(t => TIER[t])
+    .filter(name => groupNames.includes(name));
+  const primaryGroups = ["Proxy", ...orderedTiers].filter(g => groupNames.includes(g));
   const otherGroups = groupNames.filter(g => !primaryGroups.includes(g));
 
   const modeMeta = MODE_META[mode] ?? { dot: "bg-slate-400", blurb: "" };
@@ -290,7 +295,10 @@ export default function Dashboard() {
       </section>
 
       {/* Detailed group cards -------------------------------------------- */}
-      <div className="grid md:grid-cols-2 gap-3">
+      {/* Single column: tiers read top-to-bottom in natural 1→2→3 order, and
+          each card expands independently (a 2-col grid stretched the collapsed
+          sibling to match the expanded card, showing a misleading empty box). */}
+      <div className="space-y-3">
         {[...primaryGroups.filter(g => g !== "Proxy"), ...otherGroups].map(groupName => {
           const entries = groups[groupName] ?? [];
           const sel = selected[groupName];

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd unit TEMPLATE for Surge Controller.
+
+  The real plist is machine-specific (absolute paths differ per host), so it is
+  gitignored. Copy this template, fill in the absolute paths for THIS machine,
+  then install:
+
+    cp scripts/com.bushicherry.surgecontroller.plist.example \
+       scripts/com.bushicherry.surgecontroller.plist
+    # edit the paths below to match this machine, then:
+    cp scripts/com.bushicherry.surgecontroller.plist ~/Library/LaunchAgents/
+    launchctl load -w ~/Library/LaunchAgents/com.bushicherry.surgecontroller.plist
+
+  Real secrets (NEXTAUTH_SECRET, APP_ENC_KEY) belong in .env.local (Next.js
+  loads it automatically); do NOT put them here or commit them.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.bushicherry.surgecontroller</string>
+  <key>WorkingDirectory</key><string>/ABSOLUTE/PATH/TO/surge-controller</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>mkdir -p data &amp;&amp; exec yarn start</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>NODE_ENV</key>
+    <string>production</string>
+    <!-- Absolute DB path so it never depends on WorkingDirectory/TCC (see Q5 #7). -->
+    <key>DB_PATH</key>
+    <string>/ABSOLUTE/PATH/TO/surge-controller/data/app.db</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <!-- Avoid fast respawn on a boot-time failure (see Q5 #6). -->
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>/ABSOLUTE/PATH/TO/surge-controller/data/stdout.log</string>
+  <key>StandardErrorPath</key><string>/ABSOLUTE/PATH/TO/surge-controller/data/stderr.log</string>
+</dict>
+</plist>

@@ -31,18 +31,36 @@ Code changes so far live only on the dev Mac until a `deploy`.
 - [x] **Temp decision**: keep `osx-cpu-temp` (no sudo) — it returns **CPU 35° AND
       GPU 39°** on this box. Fan is N/A without powermetrics; enable powermetrics
       later only if fan rpm is needed (`MONITOR_POWERMETRICS=1` + sudoers).
-- [~] **Lid-closed keep-awake**: CHECKED — idle sleep off, but **`SleepDisabled`
-      NOT set**. To guarantee headless 24x7: `sudo pmset -a disablesleep 1`
-      (via `remote.sh ssh`). PENDING user action.
-- [!] **Battery observation**: monitor shows **84% charging on AC** while AlDente
-      should cap at 70% → dashboard now warns. Verify AlDente is actually
-      enforcing the cap (or it's a scheduled calibration top-up).
+- [x] **Lid-closed keep-awake EXPLAINED**: `pmset -g` shows `sleep 0 (sleep
+      prevented by nfsd)` and an active assertion `pid 312(nfsd)
+      PreventUserIdleSystemSleep "com.apple.nfsd"`. NFS file sharing holds a
+      no-idle-sleep assertion; on AC this also keeps it awake lid-closed (same
+      mechanism as `caffeinate -s`). That's why it's run headless for years with
+      **`SleepDisabled` NOT set**. FRAGILE: if NFS sharing is ever turned off or
+      the machine runs off AC, it will sleep. To make it robust & independent of
+      nfsd: `sudo pmset -a disablesleep 1` (optional hardening, not required today).
+- [x] **Battery observation EXPLAINED**: user keeps the box on AC continuously,
+      so AlDente never gets a discharge cycle to drop below its 70% cap → sits at
+      ~84%. Expected. To verify the cap: unplug, let it drain <70%, replug — it
+      should then hold at 70%. Dashboard already warns on >80% charging on AC.
 - [ ] **Reproduce select flow** on the box; if a 400 remains, read the exact
       `{group, policy, error}` via `scripts/remote.sh audit`.
 - [ ] **Run subscription update** end-to-end so the tool's tier groups actually
       exist in the live profile (unblocks the tier-flip path).
-- [ ] **Harden plist** (blind spots): real `NEXTAUTH_SECRET` + `APP_ENC_KEY`,
-      `ThrottleInterval`, absolute `DB_PATH`.
+- [~] **Harden plist** (blind spots): the plist is now a gitignored per-machine
+      file with a committed `*.plist.example` template (fixes the deploy blocker
+      where the box's `jeffreychen`-path edits made `git pull --ff-only` fail).
+      Template bakes in `ThrottleInterval` (10s) + absolute `DB_PATH`. Real
+      `NEXTAUTH_SECRET` + `APP_ENC_KEY` still PENDING user action — put them in
+      `.env.local` on the box (Next.js loads it), not in git. To apply the
+      hardening on the box: copy the template → real plist with box paths, `cp`
+      to `~/Library/LaunchAgents/`, `launchctl unload/load -w`.
+- [x] **Deploy blocker found & fixed**: box was stuck at `fe46e8a` (one behind
+      `origin/main`) because its tracked plist was locally edited (per-machine
+      paths) → `git pull --ff-only` refused. Now that the plist is gitignored,
+      pulls are clean. Also confirmed: the box IS serving the round-2 build
+      (structured logs present, buildId current); the stale 2-col UI / Tier2
+      ordering the user saw was **cached old client JS** — a hard reload fixes it.
 
 ### Round 2 (Jul 11) — 10-item feedback, all deployed & verified
 - **#9 keystone**: Surge was running `Airport0708`, app writes `Airport.conf`.
